@@ -12,6 +12,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/garyburd/redigo/redis"
 	"github.com/nulab/go-typetalk/typetalk"
+	"path"
 )
 
 type Config struct {
@@ -32,7 +33,8 @@ func main() {
 		fmt.Println("os.Executable error: " + err.Error())
 		return
 	}
-	defaultConfFilePath := executablePath + "/conf.json"
+
+	defaultConfFilePath := path.Dir(executablePath) + "/conf.json"
 	var configFilePath string
 	flag.StringVar(&configFilePath, "config", defaultConfFilePath, "config file path")
 	flag.StringVar(&configFilePath, "c", defaultConfFilePath, "config file path")
