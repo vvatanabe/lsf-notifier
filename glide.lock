@@ -1,0 +1,19 @@
+hash: eedb5c326016fd06857ed6952382e674c06e78ef50940649bafe458eadde20ec
+updated: 2017-08-26T15:22:12.027250067+09:00
+imports:
+- name: github.com/andybalholm/cascadia
+  version: 349dd0209470eabd9514242c688c403c0926d266
+- name: github.com/garyburd/redigo
+  version: 433969511232c397de61b1442f9fd49ec06ae9ba
+- name: github.com/nulab/go-typetalk
+  version: 715d35382daf97b359cdbe7a49231cf4bd379683
+  subpackages:
+  - typetalk
+- name: github.com/PuerkitoBio/goquery
+  version: e1271ee34c6a305e38566ecd27ae374944907ee9
+- name: golang.org/x/net
+  version: 57efc9c3d9f91fb3277f8da1cff370539c4d3dc5
+  subpackages:
+  - html
+  - html/atom
+testImports: []
