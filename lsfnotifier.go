@@ -29,8 +29,8 @@ type Config struct {
 }
 
 const (
-	documentUrl        = "https://lsf.jp/rent/nam_1.php"
-	houseDetailBaseUrl = "https://lsf.jp/rent/bui_1.php"
+	documentUrl        = "http://www.lsf.jp/rent/nam_1.php"
+	houseDetailBaseUrl = "http://www.lsf.jp/rent/bui_1.php"
 )
 
 func main() {
