@@ -12,6 +12,8 @@ import (
 	"log"
 	"path"
 
+	"strings"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/comail/colog"
 	"github.com/garyburd/redigo/redis"
@@ -25,6 +27,11 @@ type Config struct {
 	RedisNetWork    string   `json:"redis_network"`
 	RedisPort       string   `json:"redis_port"`
 }
+
+const (
+	documentUrl        = "https://lsf.jp/rent/nam_1.php"
+	houseDetailBaseUrl = "https://lsf.jp/rent/bui_1.php"
+)
 
 func main() {
 
@@ -40,7 +47,7 @@ func main() {
 	defaultConfFilePath := path.Dir(executablePath) + "/conf.json"
 	var (
 		configFilePath string
-		logFilePath string
+		logFilePath    string
 	)
 	flag.StringVar(&configFilePath, "config", defaultConfFilePath, "config file path")
 	flag.StringVar(&configFilePath, "c", defaultConfFilePath, "config file path")
@@ -50,16 +57,21 @@ func main() {
 	// ---------------------------------------
 	// parse config
 	// ---------------------------------------
-	config, err := parseConfig(configFilePath)
+	notifierConfig, err := parseConfig(configFilePath)
 	if err != nil {
 		fmt.Println("parse config error: " + err.Error())
 		return
 	}
 
 	// ---------------------------------------
+	// setup typetalk
+	// ---------------------------------------
+	client := typetalk.NewClient(nil).SetTypetalkToken(notifierConfig.TypetalkToken)
+
+	// ---------------------------------------
 	// setup log
 	// ---------------------------------------
-	if (0 < len(logFilePath)) {
+	if 0 < len(logFilePath) {
 		file, err := os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
 		if err != nil {
 			fmt.Println("open log file error: " + err.Error())
@@ -70,14 +82,14 @@ func main() {
 	colog.SetDefaultLevel(colog.LDebug)
 	colog.SetMinLevel(colog.LTrace)
 	colog.SetFormatter(&colog.StdFormatter{
-		Flag:   log.Ldate | log.Ltime | log.Lshortfile,
+		Flag: log.Ldate | log.Ltime | log.Lshortfile,
 	})
 	colog.Register()
 
 	// ---------------------------------------
 	// setup redis
 	// ---------------------------------------
-	c, err := redis.Dial(config.RedisNetWork, config.RedisPort)
+	c, err := redis.Dial(notifierConfig.RedisNetWork, notifierConfig.RedisPort)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -85,51 +97,47 @@ func main() {
 	defer c.Close()
 
 	// ---------------------------------------
-	// setup typetalk
-	// ---------------------------------------
-	client := typetalk.NewClient(nil).SetTypetalkToken(config.TypetalkToken)
-
-	// ---------------------------------------
 	// main
 	// ---------------------------------------
-	for _, houseId := range config.HouseIds {
+	doc, err := goquery.NewDocument(documentUrl)
+	if err != nil {
+		log.Printf("error: Scraping failed. Document URL: %s", documentUrl)
+	}
 
-		houseUrl := "https://lsf.jp/rent/bui_1.php?dn=" + houseId
-		doc, err := goquery.NewDocument(houseUrl)
+	for _, houseId := range notifierConfig.HouseIds {
+		selector := ".nam_table tbody tr td ul li a[href='bui_1.php?dn=" + houseId + "']"
+		houseInfo := doc.Find(selector).First().Text()
+
+		startBracketsIndex := strings.Index(houseInfo, "【")
+		endBracketsIndex := strings.Index(houseInfo, "】")
+
+		houseName := houseInfo[0:startBracketsIndex]
+		currentHouseCount := houseInfo[startBracketsIndex+3 : endBracketsIndex]
+
+		houseCountKey := "HOUSE_" + houseId + "_COUNT"
+		beforeHouseCount, err := redis.String(c.Do("GET", houseCountKey))
 		if err != nil {
-			log.Printf("error: Scraping failed. House ID: %s", houseId)
+			log.Printf("info: Before house count data does not exist. House name: %s", houseName)
 		}
 
-		houseName := doc.Find("table.jyu_table tr td span").First().Text()
-		hitNumBox := doc.Find("#hitnum_box")
-
-		currentHitNumBoxText := hitNumBox.Text()
-
-		hitNumBoxTextKey := "HitNumBoxText-" + houseId
-		beforeHitNumBoxText, err := redis.String(c.Do("GET", hitNumBoxTextKey))
-		if err != nil {
-			log.Printf("info: Before house data does not exist. House name: %s", houseName)
-		}
-
-		if currentHitNumBoxText == beforeHitNumBoxText {
-			log.Printf("info: It's the same as the before state. House name: %s", houseName)
+		if currentHouseCount == beforeHouseCount {
+			log.Printf(
+				"info: It's the same as the before state. current: %s, before: %s, House name: %s",
+				currentHouseCount,
+				beforeHouseCount,
+				houseName,
+			)
 			continue
 		}
 
-		c.Do("SET", hitNumBoxTextKey, currentHitNumBoxText)
+		c.Do("SET", houseCountKey, currentHouseCount)
 
-		message := "House name: " + houseName + "\n"
-		hitNumBox.Find("span").Each(func(i int, s *goquery.Selection) {
-			if i == 0 {
-				message += "Repaired house: " + s.Text() + "\n"
-			} else if i == 1 {
-				message += "General houes: " + s.Text() + "\n"
-			}
-		})
-		message += "URL: " + houseUrl + "\n"
-		ctx := context.Background()
-		client.Messages.PostMessage(ctx, config.TypetalkTopicId, message, nil)
+		houseDetailUrl := houseDetailBaseUrl + "?dn=" + houseId
+
+		message := "[" + houseInfo + "](" + houseDetailUrl + ")"
+		client.Messages.PostMessage(context.Background(), notifierConfig.TypetalkTopicId, message, nil)
 		log.Printf("info: %s", message)
+
 	}
 
 }
