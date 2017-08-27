@@ -1,10 +1,15 @@
-hash: eedb5c326016fd06857ed6952382e674c06e78ef50940649bafe458eadde20ec
-updated: 2017-08-26T15:22:12.027250067+09:00
+hash: c1f2d66a33290636d2b48bb5f9a2688f174efd5aee4ee8853d227217e75242e9
+updated: 2017-08-27T11:04:58.798564718+09:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
+- name: github.com/comail/colog
+  version: fba8e7b1f46c3607f09760ce3880066e7ff57c5a
 - name: github.com/garyburd/redigo
   version: 433969511232c397de61b1442f9fd49ec06ae9ba
+  subpackages:
+  - internal
+  - redis
 - name: github.com/nulab/go-typetalk
   version: 715d35382daf97b359cdbe7a49231cf4bd379683
   subpackages:

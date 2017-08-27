@@ -9,10 +9,13 @@ import (
 	"flag"
 	"os"
 
+	"log"
+	"path"
+
 	"github.com/PuerkitoBio/goquery"
+	"github.com/comail/colog"
 	"github.com/garyburd/redigo/redis"
 	"github.com/nulab/go-typetalk/typetalk"
-	"path"
 )
 
 type Config struct {
@@ -35,9 +38,13 @@ func main() {
 	}
 
 	defaultConfFilePath := path.Dir(executablePath) + "/conf.json"
-	var configFilePath string
+	var (
+		configFilePath string
+		logFilePath string
+	)
 	flag.StringVar(&configFilePath, "config", defaultConfFilePath, "config file path")
 	flag.StringVar(&configFilePath, "c", defaultConfFilePath, "config file path")
+	flag.StringVar(&logFilePath, "log", "", "log file path")
 	flag.Parse()
 
 	// ---------------------------------------
@@ -48,6 +55,24 @@ func main() {
 		fmt.Println("parse config error: " + err.Error())
 		return
 	}
+
+	// ---------------------------------------
+	// setup log
+	// ---------------------------------------
+	if (0 < len(logFilePath)) {
+		file, err := os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+		if err != nil {
+			fmt.Println("open log file error: " + err.Error())
+			return
+		}
+		colog.SetOutput(file)
+	}
+	colog.SetDefaultLevel(colog.LDebug)
+	colog.SetMinLevel(colog.LTrace)
+	colog.SetFormatter(&colog.StdFormatter{
+		Flag:   log.Ldate | log.Ltime | log.Lshortfile,
+	})
+	colog.Register()
 
 	// ---------------------------------------
 	// setup redis
@@ -72,7 +97,7 @@ func main() {
 		houseUrl := "https://lsf.jp/rent/bui_1.php?dn=" + houseId
 		doc, err := goquery.NewDocument(houseUrl)
 		if err != nil {
-			fmt.Print("Scraping failed. House ID: " + houseId)
+			log.Printf("error: Scraping failed. House ID: %s", houseId)
 		}
 
 		houseName := doc.Find("table.jyu_table tr td span").First().Text()
@@ -83,11 +108,11 @@ func main() {
 		hitNumBoxTextKey := "HitNumBoxText-" + houseId
 		beforeHitNumBoxText, err := redis.String(c.Do("GET", hitNumBoxTextKey))
 		if err != nil {
-			fmt.Println("Before house data does not exist. House name: " + houseName)
+			log.Printf("info: Before house data does not exist. House name: %s", houseName)
 		}
 
 		if currentHitNumBoxText == beforeHitNumBoxText {
-			fmt.Println("It's the same as the before state. House name: " + houseName)
+			log.Printf("info: It's the same as the before state. House name: %s", houseName)
 			continue
 		}
 
@@ -104,7 +129,7 @@ func main() {
 		message += "URL: " + houseUrl + "\n"
 		ctx := context.Background()
 		client.Messages.PostMessage(ctx, config.TypetalkTopicId, message, nil)
-		fmt.Println(message)
+		log.Printf("info: %s", message)
 	}
 
 }

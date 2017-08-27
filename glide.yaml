@@ -6,3 +6,4 @@ import:
   version: 1.0.1
 - package: github.com/garyburd/redigo
   version: v1.1.0
+- package: github.com/comail/colog
